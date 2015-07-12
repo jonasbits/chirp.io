@@ -7,6 +7,7 @@ import sys
 import wave
 import string
 import threading
+import webbrowser
 import pyaudio
 import requests
 import argparse
@@ -212,8 +213,7 @@ if __name__ == '__main__':
 
     from threading import Thread
 
-    def threaded_function(arg):
-        data = arg
+    def threaded_function(data):
         datalen = len(data)
         s = 0
         chirp_code = None
@@ -231,11 +231,9 @@ if __name__ == '__main__':
                     print ('Found Chirp!')
                     print ('Code: %s' % chirp_code)
                     print ('URL: http://chirp.io/%s' % chirp_code[2:12])
+                    webbrowser.open('http://chirp.io/%s' % chirp_code[2:12])
                     sys.exit(0)
             s += 1
-
-        #if chirp_code is None:
-            #print ('No Chirp found')
 
 
     def gogo():
