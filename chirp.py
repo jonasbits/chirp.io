@@ -124,6 +124,7 @@ class Chirp():
     """
     RATE = SAMPLE_RATE
     CHIRP_LENGTH = 0.0872  # 87.2ms
+    NUM_SAMPLES = CHIRP_LENGTH * RATE
     CHIRP_VOLUME = 2 ** 16 / 4  # quarter amplitude
     POST_URL = 'http://dinu.chirp.io/chirp'
 
@@ -162,24 +163,23 @@ class Chirp():
         """ Try and find a chirp in the data, and decode into a string """
         s = 0
         chirp = ''
-        samp_len = self.CHIRP_LENGTH * self.RATE
 
         for i in range(0, 2):
-            freq = self.signal.max_freq(data[s:s+samp_len])
+            freq = self.signal.max_freq(data[s:s+self.NUM_SAMPLES])
             # find closest frequency in chirp map
             ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
             chirp += ch
-            s += samp_len
+            s += self.NUM_SAMPLES
 
         if chirp != 'hj':
             return None
 
         for i in range(2, 20):
-            freq = self.signal.max_freq(data[s:s+samp_len])
+            freq = self.signal.max_freq(data[s:s+self.NUM_SAMPLES])
             # find closest frequency in chirp map
             ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
             chirp += ch
-            s += samp_len
+            s += self.NUM_SAMPLES
 
         return chirp
 
@@ -211,27 +211,32 @@ if __name__ == '__main__':
         data = np.frombuffer(buf, dtype=np.int16)
         datalen = len(data)
 
-        s = 5000  # avoid initial glitches
-        while data[s] < MIN_AMPLITUDE:
-            s += 1  # search for start of audio
-            if s == datalen - 1:
-                print('No sound detected')
-                sys.exit(-1)
+        s = 0
+        chirp_code = None
 
-        chirp_code = chirp.decode(data[s:])
+        while s < datalen - chirp.NUM_SAMPLES * 20:
+            # search for start of audio
+            if data[s] > MIN_AMPLITUDE:
+                chirp_code = chirp.decode(data[s:])
+                if chirp_code is None:
+                    s += 2 * chirp.NUM_SAMPLES
+                else:
+                    print ('Found Chirp!')
+                    print (chirp_code)
+                    sys.exit(0)
+            s += 1
+
         if chirp_code is None:
             print ('No Chirp found')
             sys.exit(-1)
-        else:
-            print ('Found Chirp!')
-            print (chirp_code)
-            sys.exit(0)
 
     elif args.code:
         samples = chirp.encode(args.code)
+        print('Chirping code: %s' % args.code)
         audio.play(samples)
 
     elif args.url:
         code = chirp.get_code(args.url)
         samples = chirp.encode(code)
+        print('Chirping url: %s' % args.url)
         audio.play(samples)
