@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Chirp.io Encoder/Decoder
-Joe Todd
+Joe Todd, Luke Jackson
 """
 from __future__ import print_function
 
@@ -229,14 +229,16 @@ class Chirp():
 
 
 class DecodeThread(threading.Thread):
+    """ Thread to run digital signal processing functions """
 
-    def __init__(self, fn, queue):
+    def __init__(self, fn, queue, quit=False):
         self.fn = fn
         self.queue = queue
+        self.quit = quit
         threading.Thread.__init__(self)
 
     def run(self):
-        while (True):
+        while not self.quit:
             if not self.queue.empty():
                 data = self.queue.get()
                 with self.queue.mutex:
@@ -260,20 +262,26 @@ if __name__ == '__main__':
 
     chirp = Chirp()
     dsp = Signal(SAMPLE_RATE)
-    signal.signal(signal.SIGINT, signal_handler)
+    #signal.signal(signal.SIGINT, signal_handler)
 
     if args.l:
-        audio = Audio()
-        queue = Queue.Queue()
-        thread = DecodeThread(chirp.search, queue)
-        thread.start()
-        print('Recording...')
+        try:
+            audio = Audio()
+            queue = Queue.Queue()
+            thread = DecodeThread(chirp.search, queue)
+            thread.start()
+            print('Recording...')
 
-        while (True):
-            buf = audio.record(SAMPLE_LENGTH)
-            data = np.frombuffer(buf, dtype=np.int16)
-            queue.put(data)
-            sys.stdout.write('.')
+            while (True):
+                buf = audio.record(SAMPLE_LENGTH)
+                data = np.frombuffer(buf, dtype=np.int16)
+                queue.put(data)
+                sys.stdout.write('.')
+
+        except KeyboardInterrupt:
+            print('Exiting..')
+            thread.quit = True
+            sys.exit(0)
 
     elif args.code:
         audio = Audio()
