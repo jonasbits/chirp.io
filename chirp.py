@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import sys
 import wave
+import time
 import Queue
 import string
 import signal
@@ -241,6 +242,7 @@ class DecodeThread(threading.Thread):
                 with self.queue.mutex:
                     self.queue.queue.clear()
                 self.fn(data)
+                time.sleep(SAMPLE_LENGTH)
 
 
 def signal_handler(signal, frame):
