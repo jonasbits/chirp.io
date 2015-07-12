@@ -6,6 +6,7 @@ Joe Todd
 import sys
 import wave
 import string
+import threading
 import pyaudio
 import requests
 import argparse
@@ -209,11 +210,11 @@ if __name__ == '__main__':
     signal = Signal(SAMPLE_RATE)
     audio = Audio()
 
-    if args.listen:
-        buf = audio.record(args.listen)
-        data = np.frombuffer(buf, dtype=np.int16)
-        datalen = len(data)
+    from threading import Thread
 
+    def threaded_function(arg):
+        data = arg
+        datalen = len(data)
         s = 0
         chirp_code = None
 
@@ -235,7 +236,17 @@ if __name__ == '__main__':
 
         if chirp_code is None:
             print ('No Chirp found')
-            sys.exit(-1)
+
+
+    def gogo():
+        buf = audio.record(args.listen)
+        data = np.frombuffer(buf, dtype=np.int16)
+        thread = Thread(target = threaded_function, args = (data, ))
+        thread.start()
+        gogo()
+
+    if args.listen:
+        gogo()
 
     elif args.code:
         samples = chirp.encode(args.code)
