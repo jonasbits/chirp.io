@@ -113,6 +113,10 @@ class Signal():
         index = y.argmax()
         return x[index]
 
+    def sine_wave(self, freq, duration):
+        """ Generate a sine wave array at given frequency for duration in seconds """
+        return np.sin(2 * np.pi * np.arange(self.fs * duration) * freq / self.fs)
+
 
 class Chirp():
     """ Chirp Encoding/Decoding
@@ -120,7 +124,7 @@ class Chirp():
     """
     RATE = SAMPLE_RATE
     CHIRP_LENGTH = 0.0872  # 87.2ms
-    CHIRP_VOLUME = 2 ** 16 / 4
+    CHIRP_VOLUME = 2 ** 16 / 4  # quarter amplitude
     POST_URL = 'http://dinu.chirp.io/chirp'
 
     def __init__(self):
@@ -181,14 +185,12 @@ class Chirp():
 
     def encode(self, data):
         """ Generate audio data from a chirp string """
-        duration = self.CHIRP_LENGTH
-        fs = self.RATE
         samples = np.array([], dtype=np.int16)
 
         for s in data:
-            f = self.map[s]
-            period = np.sin(2*np.pi*np.arange(fs*duration)*f/fs)
-            samples = np.concatenate([samples, period])
+            freq = self.map[s]
+            chirp = self.signal.sine_wave(freq, self.CHIRP_LENGTH)
+            samples = np.concatenate([samples, chirp])
 
         samples = (samples * self.CHIRP_VOLUME).astype(np.int16)
         return samples
@@ -209,7 +211,7 @@ if __name__ == '__main__':
         data = np.frombuffer(buf, dtype=np.int16)
         datalen = len(data)
 
-        s = 10000  # avoid initial glitches
+        s = 5000  # avoid initial glitches
         while data[s] < MIN_AMPLITUDE:
             s += 1  # search for start of audio
             if s == datalen - 1:
