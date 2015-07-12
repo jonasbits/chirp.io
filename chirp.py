@@ -228,7 +228,8 @@ if __name__ == '__main__':
                     s += 2 * chirp.CHAR_SAMPLES
                 else:
                     print ('Found Chirp!')
-                    print (chirp_code)
+                    print ('Code: %s' % chirp_code)
+                    print ('URL: http://chirp.io/%s' % chirp_code[2:12])
                     sys.exit(0)
             s += 1
 
