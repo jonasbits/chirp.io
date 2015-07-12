@@ -10,7 +10,6 @@ import wave
 import time
 import Queue
 import string
-import signal
 import pyaudio
 import requests
 import argparse
@@ -220,10 +219,10 @@ class Chirp():
                     # advance by frontdoor pair length
                     s += 2 * self.CHAR_SAMPLES
                 else:
+                    url = self.GET_URL + '/' + chirp_code[2:12]
                     print ('\nFound Chirp!')
-                    # print ('Code: %s' % chirp_code)
-                    print ('URL: %s/%s' % (self.GET_URL, chirp_code[2:12]))
-                    webbrowser.open('http://chirp.io/%s' % chirp_code[2:12])
+                    print ('URL: %s' % url)
+                    webbrowser.open(url)
                     return
             s += 1
 
@@ -262,7 +261,6 @@ if __name__ == '__main__':
 
     chirp = Chirp()
     dsp = Signal(SAMPLE_RATE)
-    #signal.signal(signal.SIGINT, signal_handler)
 
     if args.l:
         try:
