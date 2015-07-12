@@ -7,7 +7,6 @@ from __future__ import print_function
 
 import sys
 import wave
-import time
 import Queue
 import string
 import signal
@@ -15,6 +14,7 @@ import pyaudio
 import requests
 import argparse
 import threading
+import webbrowser
 import numpy as np
 
 MIN_AMPLITUDE = 2500
@@ -222,6 +222,7 @@ class Chirp():
                     print ('\nFound Chirp!')
                     # print ('Code: %s' % chirp_code)
                     print ('URL: %s/%s' % (self.GET_URL, chirp_code[2:12]))
+                    webbrowser.open('http://chirp.io/%s' % chirp_code[2:12])
                     return
             s += 1
 
