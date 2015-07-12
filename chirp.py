@@ -35,13 +35,13 @@ class Audio():
                         input=True,
                         frames_per_buffer=self.CHUNK)
 
-        print("Recording...")
+        #print("Recording...")
 
         for i in range(0, int(self.RATE / self.CHUNK * seconds)):
             data = stream.read(self.CHUNK)
             frames.append(data)
 
-        print("Done Recording!")
+        #print("Done Recording!")
 
         stream.stop_stream()
         stream.close()
@@ -234,8 +234,8 @@ if __name__ == '__main__':
                     sys.exit(0)
             s += 1
 
-        if chirp_code is None:
-            print ('No Chirp found')
+        #if chirp_code is None:
+            #print ('No Chirp found')
 
 
     def gogo():
@@ -246,6 +246,7 @@ if __name__ == '__main__':
         gogo()
 
     if args.listen:
+        print('Listening...')
         gogo()
 
     elif args.code:
