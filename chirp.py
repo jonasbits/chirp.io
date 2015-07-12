@@ -3,69 +3,73 @@
 Chirp.io Encoder/Decoder
 Joe Todd
 """
+from __future__ import print_function
+
 import sys
 import wave
+import time
+import Queue
 import string
+import signal
 import pyaudio
 import requests
 import argparse
+import threading
 import numpy as np
 
 MIN_AMPLITUDE = 2500
-SAMPLE_RATE = 44100.0
+SAMPLE_RATE = 44100.0  # Hz
+SAMPLE_LENGTH = 5  # sec
 
 
 class Audio():
     """ Audio Processing """
-    CHUNK = 1024
+    CHUNK = 8192
     FORMAT = pyaudio.paInt16
     SAMPLE_SIZE = 2L
     CHANNELS = 1
     RATE = SAMPLE_RATE
     HUMAN_RANGE = 20000
 
+    def __init__(self):
+        self.audio = pyaudio.PyAudio()
+
+    def __del__(self):
+        self.audio.terminate()
+
     def record(self, seconds, filename=None):
         """ Record audio from system microphone """
         frames = []
-        p = pyaudio.PyAudio()
-        stream = p.open(format=self.FORMAT,
-                        channels=self.CHANNELS,
-                        rate=int(self.RATE),
-                        input=True,
-                        frames_per_buffer=self.CHUNK)
-
-        print("Recording...")
+        stream = self.audio.open(format=self.FORMAT,
+                                 channels=self.CHANNELS,
+                                 rate=int(self.RATE),
+                                 input=True,
+                                 frames_per_buffer=self.CHUNK)
 
         for i in range(0, int(self.RATE / self.CHUNK * seconds)):
             data = stream.read(self.CHUNK)
             frames.append(data)
 
-        print("Done Recording!")
+        if filename:
+            self.write(frames, filename)
 
         stream.stop_stream()
         stream.close()
-        p.terminate()
-
-        if filename:
-            self.write(frames, filename)
 
         return b''.join(frames)
 
     def play(self, frames):
         """ Write data to system audio buffer"""
-        p = pyaudio.PyAudio()
-        stream = p.open(format=pyaudio.paInt16,
-                        channels=1,
-                        rate=int(self.RATE),
-                        output=True)
+        stream = self.audio.open(format=pyaudio.paInt16,
+                                 channels=1,
+                                 rate=int(self.RATE),
+                                 output=True)
         stream.write(frames, len(frames))
         stream.stop_stream()
         stream.close()
-        p.terminate()
 
     def read(self, filename):
         """ Read wave file """
-        print("Reading audio..")
         wf = wave.open(filename, 'rb')
         buf = bytearray()
 
@@ -126,12 +130,13 @@ class Chirp():
     CHAR_LENGTH = 0.0872  # duration of one chirp character - 87.2ms
     CHAR_SAMPLES = CHAR_LENGTH * RATE  # number of samples in one chirp character
     CHIRP_SAMPLES = CHAR_SAMPLES * 20  # number of samples in an entire chirp
-    CHIRP_VOLUME = 2 ** 16 / 4  # quarter of max amplitude
+    CHIRP_VOLUME = 2 ** 16 / 48  # quarter of max amplitude
+    GET_URL = 'http://chirp.io'
     POST_URL = 'http://dinu.chirp.io/chirp'
 
     def __init__(self):
         self.map = self.get_map()
-        self.signal = Signal(self.RATE)
+        self.dsp = Signal(self.RATE)
 
     def get_map(self):
         """ Construct map of chirp characters to frequencies
@@ -167,7 +172,7 @@ class Chirp():
         chirp = ''
 
         for i in range(0, 2):
-            freq = self.signal.max_freq(data[s:s+self.CHAR_SAMPLES])
+            freq = self.dsp.max_freq(data[s:s+self.CHAR_SAMPLES])
             # find closest frequency in chirp map and return character
             ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
             chirp += ch
@@ -178,7 +183,7 @@ class Chirp():
             return None
 
         for i in range(2, 20):
-            freq = self.signal.max_freq(data[s:s+self.CHAR_SAMPLES])
+            freq = self.dsp.max_freq(data[s:s+self.CHAR_SAMPLES])
             # find closest frequency in chirp map and return character
             ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
             chirp += ch
@@ -192,57 +197,89 @@ class Chirp():
 
         for s in data:
             freq = self.map[s]
-            char = self.signal.sine_wave(freq, self.CHAR_LENGTH)
+            char = self.dsp.sine_wave(freq, self.CHAR_LENGTH)
             samples = np.concatenate([samples, char])
 
         samples = (samples * self.CHIRP_VOLUME).astype(np.int16)
         return samples
 
+    def search(self, data):
+        """ Search data for audio, and try and decode """
+        s = 0
+        chirp_code = None
+        datalen = len(data)
+
+        while s < datalen - self.CHIRP_SAMPLES:
+            # search for start of audio
+            if data[s] > MIN_AMPLITUDE:
+                # check for any chirps, if unsuccessful
+                # carry on searching..
+                chirp_code = self.decode(data[s:])
+                if chirp_code is None:
+                    # advance by frontdoor pair length
+                    s += 2 * self.CHAR_SAMPLES
+                else:
+                    print ('\nFound Chirp!')
+                    # print ('Code: %s' % chirp_code)
+                    print ('URL: %s/%s' % (self.GET_URL, chirp_code[2:12]))
+                    return
+            s += 1
+
+
+class DecodeThread(threading.Thread):
+
+    def __init__(self, fn, queue):
+        self.fn = fn
+        self.queue = queue
+        threading.Thread.__init__(self)
+
+    def run(self):
+        while (True):
+            if not self.queue.empty():
+                data = self.queue.get()
+                with self.queue.mutex:
+                    self.queue.queue.clear()
+                self.fn(data)
+
+
+def signal_handler(signal, frame):
+    """ Capture CTRL-C and exit """
+    print('Exiting..')
+    sys.exit(0)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Chirp.io Encoder/Decoder')
-    parser.add_argument('-l', '--listen', type=int, help='listen for a chirp for n seconds')
+    parser.add_argument('-l', action='store_true', default=False, help='listen out for a chirp')
     parser.add_argument('-u', '--url', help='chirp a url')
     parser.add_argument('-c', '--code', help='chirp a code')
     args = parser.parse_args()
 
     chirp = Chirp()
-    signal = Signal(SAMPLE_RATE)
-    audio = Audio()
+    dsp = Signal(SAMPLE_RATE)
+    signal.signal(signal.SIGINT, signal_handler)
 
-    if args.listen:
-        buf = audio.record(args.listen)
-        data = np.frombuffer(buf, dtype=np.int16)
-        datalen = len(data)
+    if args.l:
+        audio = Audio()
+        queue = Queue.Queue()
+        thread = DecodeThread(chirp.search, queue)
+        thread.start()
+        print('Recording...')
 
-        s = 0
-        chirp_code = None
-
-        while s < datalen - chirp.CHIRP_SAMPLES:
-            # search for start of audio
-            if data[s] > MIN_AMPLITUDE:
-                # check for any chirps, if unsuccessful
-                # carry on searching..
-                chirp_code = chirp.decode(data[s:])
-                if chirp_code is None:
-                    # advance by frontdoor pair length
-                    s += 2 * chirp.CHAR_SAMPLES
-                else:
-                    print ('Found Chirp!')
-                    print ('Code: %s' % chirp_code)
-                    print ('URL: http://chirp.io/%s' % chirp_code[2:12])
-                    sys.exit(0)
-            s += 1
-
-        if chirp_code is None:
-            print ('No Chirp found')
-            sys.exit(-1)
+        while (True):
+            buf = audio.record(SAMPLE_LENGTH)
+            data = np.frombuffer(buf, dtype=np.int16)
+            queue.put(data)
+            sys.stdout.write('.')
 
     elif args.code:
+        audio = Audio()
         samples = chirp.encode(args.code)
         print('Chirping code: %s' % args.code)
         audio.play(samples)
 
     elif args.url:
+        audio = Audio()
         code = chirp.get_code(args.url)
         samples = chirp.encode(code)
         print('Chirping url: %s' % args.url)
