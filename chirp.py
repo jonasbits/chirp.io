@@ -23,7 +23,6 @@ class Audio():
     CHANNELS = 1
     RATE = SAMPLE_RATE
     HUMAN_RANGE = 20000
-    VOLUME = 0.5
 
     def record(self, seconds, filename=None):
         """ Record audio from system microphone """
@@ -80,6 +79,7 @@ class Audio():
         return buf
 
     def write(self, frames, filename):
+        """ Write wave file """
         wf = wave.open(filename, 'wb')
         wf.setnchannels(self.CHANNELS)
         wf.setsampwidth(self.SAMPLE_SIZE)
@@ -123,9 +123,10 @@ class Chirp():
         http://chirp.io/technology/
     """
     RATE = SAMPLE_RATE
-    CHIRP_LENGTH = 0.0872  # 87.2ms
-    NUM_SAMPLES = CHIRP_LENGTH * RATE
-    CHIRP_VOLUME = 2 ** 16 / 4  # quarter amplitude
+    CHAR_LENGTH = 0.0872  # duration of one chirp character - 87.2ms
+    CHAR_SAMPLES = CHAR_LENGTH * RATE  # number of samples in one chirp character
+    CHIRP_SAMPLES = CHAR_SAMPLES * 20  # number of samples in an entire chirp
+    CHIRP_VOLUME = 2 ** 16 / 4  # quarter of max amplitude
     POST_URL = 'http://dinu.chirp.io/chirp'
 
     def __init__(self):
@@ -137,6 +138,7 @@ class Chirp():
             0 = 1760Hz 1 = 1864Hz v = 10.5kHz """
         a6 = 1760
         a = 2 ** (1 / 12.0)
+        # characters range from 0-9 and a-v
         chars = string.digits + string.ascii_letters[0:22]
         d = {}
 
@@ -165,21 +167,22 @@ class Chirp():
         chirp = ''
 
         for i in range(0, 2):
-            freq = self.signal.max_freq(data[s:s+self.NUM_SAMPLES])
-            # find closest frequency in chirp map
+            freq = self.signal.max_freq(data[s:s+self.CHAR_SAMPLES])
+            # find closest frequency in chirp map and return character
             ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
             chirp += ch
-            s += self.NUM_SAMPLES
+            s += self.CHAR_SAMPLES
 
+        # check for frontdoor pair
         if chirp != 'hj':
             return None
 
         for i in range(2, 20):
-            freq = self.signal.max_freq(data[s:s+self.NUM_SAMPLES])
-            # find closest frequency in chirp map
+            freq = self.signal.max_freq(data[s:s+self.CHAR_SAMPLES])
+            # find closest frequency in chirp map and return character
             ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
             chirp += ch
-            s += self.NUM_SAMPLES
+            s += self.CHAR_SAMPLES
 
         return chirp
 
@@ -189,8 +192,8 @@ class Chirp():
 
         for s in data:
             freq = self.map[s]
-            chirp = self.signal.sine_wave(freq, self.CHIRP_LENGTH)
-            samples = np.concatenate([samples, chirp])
+            char = self.signal.sine_wave(freq, self.CHAR_LENGTH)
+            samples = np.concatenate([samples, char])
 
         samples = (samples * self.CHIRP_VOLUME).astype(np.int16)
         return samples
@@ -214,12 +217,15 @@ if __name__ == '__main__':
         s = 0
         chirp_code = None
 
-        while s < datalen - chirp.NUM_SAMPLES * 20:
+        while s < datalen - chirp.CHIRP_SAMPLES:
             # search for start of audio
             if data[s] > MIN_AMPLITUDE:
+                # check for any chirps, if unsuccessful
+                # carry on searching..
                 chirp_code = chirp.decode(data[s:])
                 if chirp_code is None:
-                    s += 2 * chirp.NUM_SAMPLES
+                    # advance by frontdoor pair length
+                    s += 2 * chirp.CHAR_SAMPLES
                 else:
                     print ('Found Chirp!')
                     print (chirp_code)

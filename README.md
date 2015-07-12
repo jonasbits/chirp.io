@@ -1,7 +1,7 @@
 Chirp.io
 ========
 
-Chirp is an innovative new platform which allows you to share data using sound. This Python script allows you to convert a url into an audible chirp and vice versa. As the API is not officially released yet, the decoding function only returns the chirp code. Error correction is currently not implemented. 
+Chirp is an innovative new platform that allows you to share data using sound. This Python script allows you to convert a url into an audible chirp and vice versa. As the API is not officially released yet, the decoding function only returns the chirp code. Error correction is currently not implemented. 
 
 Dependencies
 ------------
