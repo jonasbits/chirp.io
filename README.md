@@ -13,9 +13,9 @@ Dependencies
 Usage
 -----
 
-python chirp.py [-h] [-l `<n>`] [-u `<url>`] [-c `<code>`]
-
 ```
+python chirp.py [-h] [-l <n>] [-u <url>] [-c <code>]
+
 optional arguments:
   -h, --help                  show this help message and exit
   -l <n>, --listen <n>        listen for a chirp for n seconds
