@@ -8,7 +8,6 @@ from __future__ import print_function
 import sys
 import wave
 import time
-import Queue
 import string
 import pyaudio
 import requests
@@ -17,16 +16,20 @@ import threading
 import webbrowser
 import numpy as np
 
-MIN_AMPLITUDE = 2500
+if sys.version_info[0] == 2:
+    from Queue import Queue
+elif sys.version_info[0] == 3:
+    from queue import Queue
+
+MIN_AMPLITUDE = 5000
 SAMPLE_RATE = 44100.0  # Hz
-SAMPLE_LENGTH = 5  # sec
+SAMPLE_LENGTH = 4  # sec
 
 
 class Audio():
     """ Audio Processing """
     CHUNK = 8192
     FORMAT = pyaudio.paInt16
-    SAMPLE_SIZE = 2L
     CHANNELS = 1
     RATE = SAMPLE_RATE
     HUMAN_RANGE = 20000
@@ -86,7 +89,7 @@ class Audio():
         """ Write wave file """
         wf = wave.open(filename, 'wb')
         wf.setnchannels(self.CHANNELS)
-        wf.setsampwidth(self.SAMPLE_SIZE)
+        wf.setsampwidth(self.audio.get_sample_size(self.FORMAT))
         wf.setframerate(self.RATE)
         wf.writeframes(b''.join(frames))
         wf.close()
@@ -174,7 +177,7 @@ class Chirp():
         for i in range(0, 2):
             freq = self.dsp.max_freq(data[s:s+self.CHAR_SAMPLES])
             # find closest frequency in chirp map and return character
-            ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
+            ch, f = min(self.map.items(), key=lambda kv: abs(kv[1] - freq))
             chirp += ch
             s += self.CHAR_SAMPLES
 
@@ -185,7 +188,7 @@ class Chirp():
         for i in range(2, 20):
             freq = self.dsp.max_freq(data[s:s+self.CHAR_SAMPLES])
             # find closest frequency in chirp map and return character
-            ch, f = min(self.map.items(), key=lambda (_, v): abs(v - freq))
+            ch, f = min(self.map.items(), key=lambda kv: abs(kv[1] - freq))
             chirp += ch
             s += self.CHAR_SAMPLES
 
@@ -234,6 +237,7 @@ class DecodeThread(threading.Thread):
         self.fn = fn
         self.queue = queue
         self.quit = quit
+        self.window = np.array([], dtype=np.int16)
         threading.Thread.__init__(self)
 
     def run(self):
@@ -242,14 +246,15 @@ class DecodeThread(threading.Thread):
                 data = self.queue.get()
                 with self.queue.mutex:
                     self.queue.queue.clear()
-                self.fn(data)
-                time.sleep(SAMPLE_LENGTH)
-
-
-def signal_handler(signal, frame):
-    """ Capture CTRL-C and exit """
-    print('Exiting..')
-    sys.exit(0)
+                d1, d2 = np.array_split(data, 2)
+                w1, w2 = np.array_split(self.window, 2)
+                self.window = np.concatenate([w2, d1])
+                self.fn(self.window)
+                time.sleep(SAMPLE_LENGTH / 2)
+                w1, w2 = np.array_split(self.window, 2)
+                self.window = np.concatenate([w2, d2])
+                self.fn(self.window)
+                time.sleep(SAMPLE_LENGTH / 2)
 
 
 if __name__ == '__main__':
@@ -265,7 +270,7 @@ if __name__ == '__main__':
     if args.l:
         try:
             audio = Audio()
-            queue = Queue.Queue()
+            queue = Queue()
             thread = DecodeThread(chirp.search, queue)
             thread.start()
             print('Recording...')
