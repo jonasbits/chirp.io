@@ -164,27 +164,30 @@ class Chirp():
             print('Server failed to respond')
             sys.exit(-1)
 
+    def get_char(self, data):
+        """ Find maximum frequency in fft data then find the closest
+            frequency in chirp map and return character """
+        freq = self.dsp.max_freq(data)
+        ch, f = min(self.map.items(), key=lambda kv: abs(kv[1] - freq))
+        return ch
+
     def decode(self, data):
         """ Try and find a chirp in the data, and decode into a string """
         s = 0
         chirp = ''
 
-        for i in range(0, 2):
-            freq = self.dsp.max_freq(data[s:s+self.CHAR_SAMPLES])
-            # find closest frequency in chirp map and return character
-            ch, f = min(self.map.items(), key=lambda kv: abs(kv[1] - freq))
-            chirp += ch
-            s += self.CHAR_SAMPLES
-
         # check for frontdoor pair
+        chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
+        s += self.CHAR_SAMPLES
+        if chirp != 'h':
+            return None
+        chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
+        s += self.CHAR_SAMPLES
         if chirp != 'hj':
             return None
 
         for i in range(2, 20):
-            freq = self.dsp.max_freq(data[s:s+self.CHAR_SAMPLES])
-            # find closest frequency in chirp map and return character
-            ch, f = min(self.map.items(), key=lambda kv: abs(kv[1] - freq))
-            chirp += ch
+            chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
             s += self.CHAR_SAMPLES
 
         return chirp
@@ -206,6 +209,9 @@ class Chirp():
         s = 0
         chirp_code = None
         datalen = len(data)
+
+        if data.argmax() < MIN_AMPLITUDE:
+            return
 
         while s < datalen - self.CHIRP_SAMPLES:
             # search for start of audio
@@ -238,6 +244,7 @@ class DecodeThread(threading.Thread):
     def run(self):
         while not self.quit:
             if self.data is not None:
+                # add data to window so we don't miss any chirps
                 d1, d2 = np.array_split(self.data, 2)
                 w1, w2 = np.array_split(self.window, 2)
                 self.window = np.concatenate([w2, d1])
@@ -263,7 +270,6 @@ if __name__ == '__main__':
         try:
             audio = Audio()
             thread = DecodeThread(chirp.search)
-            thread.daemon = True
             thread.start()
             print('Recording...')
 
