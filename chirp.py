@@ -16,19 +16,14 @@ import threading
 import webbrowser
 import numpy as np
 
-if sys.version_info[0] == 2:
-    from Queue import Queue
-elif sys.version_info[0] == 3:
-    from queue import Queue
-
-MIN_AMPLITUDE = 5000
+MIN_AMPLITUDE = 2500
 SAMPLE_RATE = 44100.0  # Hz
-SAMPLE_LENGTH = 4  # sec
+SAMPLE_LENGTH = 3  # sec
 
 
 class Audio():
     """ Audio Processing """
-    CHUNK = 8192
+    CHUNK = 4096
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = SAMPLE_RATE
@@ -233,28 +228,25 @@ class Chirp():
 class DecodeThread(threading.Thread):
     """ Thread to run digital signal processing functions """
 
-    def __init__(self, fn, queue, quit=False):
+    def __init__(self, fn, quit=False):
         self.fn = fn
-        self.queue = queue
+        self.data = None
         self.quit = quit
         self.window = np.array([], dtype=np.int16)
         threading.Thread.__init__(self)
 
     def run(self):
         while not self.quit:
-            if not self.queue.empty():
-                data = self.queue.get()
-                with self.queue.mutex:
-                    self.queue.queue.clear()
-                d1, d2 = np.array_split(data, 2)
+            if self.data is not None:
+                d1, d2 = np.array_split(self.data, 2)
                 w1, w2 = np.array_split(self.window, 2)
                 self.window = np.concatenate([w2, d1])
                 self.fn(self.window)
-                time.sleep(SAMPLE_LENGTH / 2)
                 w1, w2 = np.array_split(self.window, 2)
                 self.window = np.concatenate([w2, d2])
                 self.fn(self.window)
-                time.sleep(SAMPLE_LENGTH / 2)
+                self.data = None
+            time.sleep(SAMPLE_LENGTH)
 
 
 if __name__ == '__main__':
@@ -270,16 +262,14 @@ if __name__ == '__main__':
     if args.l:
         try:
             audio = Audio()
-            queue = Queue()
-            thread = DecodeThread(chirp.search, queue)
+            thread = DecodeThread(chirp.search)
+            thread.daemon = True
             thread.start()
             print('Recording...')
 
             while (True):
                 buf = audio.record(SAMPLE_LENGTH)
-                data = np.frombuffer(buf, dtype=np.int16)
-                queue.put(data)
-                sys.stdout.write('.')
+                thread.data = np.frombuffer(buf, dtype=np.int16)
 
         except KeyboardInterrupt:
             print('Exiting..')
