@@ -121,9 +121,7 @@ class Signal():
 
 
 class Chirp():
-    """ Chirp Encoding/Decoding
-        http://chirp.io/technology/
-    """
+    """ Chirp Encoding/Decoding """
     RATE = SAMPLE_RATE
     CHAR_LENGTH = 0.0872  # duration of one chirp character - 87.2ms
     CHAR_SAMPLES = CHAR_LENGTH * RATE  # number of samples in one chirp character
@@ -180,11 +178,11 @@ class Chirp():
         chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
         s += self.CHAR_SAMPLES
         if chirp != 'h':
-            return None
+            return 1
         chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
         s += self.CHAR_SAMPLES
         if chirp != 'hj':
-            return None
+            return 2
 
         for i in range(2, 20):
             chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
@@ -219,9 +217,9 @@ class Chirp():
                 # check for any chirps, if unsuccessful
                 # carry on searching..
                 chirp_code = self.decode(data[s:])
-                if chirp_code is None:
-                    # advance by frontdoor pair length
-                    s += 2 * self.CHAR_SAMPLES
+                # advance pointer by searched data
+                if isinstance(chirp_code, int):
+                    s += chirp_code * self.CHAR_SAMPLES
                 else:
                     url = self.GET_URL + '/' + chirp_code[2:12]
                     print ('\nFound Chirp!')
