@@ -10,6 +10,7 @@ import wave
 import time
 import string
 import pyaudio
+import reedsolo
 import requests
 import argparse
 import threading
@@ -121,7 +122,8 @@ class Signal():
 
 
 class Chirp():
-    """ Chirp Encoding/Decoding """
+    """ Chirp Encoding/Decoding
+        http://www.chirp.io/technology """
     RATE = SAMPLE_RATE
     CHAR_LENGTH = 0.0872  # duration of one chirp character - 87.2ms
     CHAR_SAMPLES = CHAR_LENGTH * RATE  # number of samples in one chirp character
@@ -132,7 +134,9 @@ class Chirp():
 
     def __init__(self):
         self.map = self.get_map()
+        self.chars = sorted(self.map.keys())
         self.dsp = Signal(self.RATE)
+        self.rs = reedsolo.RSCodec(nsym=8, nsize=18, prim=0x25, generator=2, c_exp=5)
 
     def get_map(self):
         """ Construct map of chirp characters to frequencies
@@ -190,11 +194,13 @@ class Chirp():
 
         return chirp
 
-    def encode(self, data):
+    def encode(self, chirp, internal=False):
         """ Generate audio data from a chirp string """
         samples = np.array([], dtype=np.int16)
+        if internal:
+            chirp = 'hj' + self.ecc(chirp[2:], encode=internal)
 
-        for s in data:
+        for s in chirp:
             freq = self.map[s]
             char = self.dsp.sine_wave(freq, self.CHAR_LENGTH)
             samples = np.concatenate([samples, char])
@@ -221,12 +227,47 @@ class Chirp():
                 if isinstance(chirp_code, int):
                     s += chirp_code * self.CHAR_SAMPLES
                 else:
+                    # try and perform error correction
+                    corrected = self.ecc(chirp_code[2:])
+                    if corrected is not None:
+                        chirp_code = 'hj' + corrected
+
                     url = self.GET_URL + '/' + chirp_code[2:12]
                     print ('\nFound Chirp!')
+                    # print (chirp_code)
                     print ('URL: %s' % url)
                     webbrowser.open(url)
                     return
             s += 1
+
+    def string_to_list(self, s):
+        """ Convert string to list for reed solomon """
+        arr = []
+        for i in s:
+            arr.append(self.chars.index(i))
+        return arr
+
+    def list_to_string(self, a):
+        """ Convert list to string for reed solomon """
+        s = ''
+        for i in a:
+            s += self.chars[i]
+        return s
+
+    def ecc(self, data, encode=False):
+        """ Reed Solomon Error Correction """
+        try:
+            if encode:
+                arr = self.string_to_list(data[0:12])
+                out = self.rs.encode(arr)
+                return self.list_to_string(out)
+            else:  # decode
+                arr = self.string_to_list(data)
+                out = self.rs.decode(arr)
+                return self.list_to_string(out)
+
+        except reedsolo.ReedSolomonError:
+            return None
 
 
 class DecodeThread(threading.Thread):
@@ -256,7 +297,8 @@ class DecodeThread(threading.Thread):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Chirp.io Encoder/Decoder')
-    parser.add_argument('-l', action='store_true', default=False, help='listen out for a chirp')
+    parser.add_argument('-l', '--listen', action='store_true', default=False, help='listen out for a chirp')
+    parser.add_argument('-i', '--internal', action='store_true', default=False, help='use internal error correction')
     parser.add_argument('-u', '--url', help='chirp a url')
     parser.add_argument('-c', '--code', help='chirp a code')
     args = parser.parse_args()
@@ -264,7 +306,7 @@ if __name__ == '__main__':
     chirp = Chirp()
     dsp = Signal(SAMPLE_RATE)
 
-    if args.l:
+    if args.listen:
         try:
             audio = Audio()
             thread = DecodeThread(chirp.search)
@@ -282,7 +324,7 @@ if __name__ == '__main__':
 
     elif args.code:
         audio = Audio()
-        samples = chirp.encode(args.code)
+        samples = chirp.encode(args.code, internal=args.internal)
         print('Chirping code: %s' % args.code)
         audio.play(samples)
 
