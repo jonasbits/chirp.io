@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 """
 Chirp.io Encoder/Decoder
-Joe Todd, Luke Jackson
 """
-from __future__ import print_function
-
 import sys
 import wave
 import time
@@ -129,8 +126,8 @@ class Chirp():
     CHAR_SAMPLES = CHAR_LENGTH * RATE  # number of samples in one chirp character
     CHIRP_SAMPLES = CHAR_SAMPLES * 20  # number of samples in an entire chirp
     CHIRP_VOLUME = 2 ** 16 / 48  # quarter of max amplitude
-    GET_URL = 'http://chirp.io'
-    POST_URL = 'http://dinu.chirp.io/chirp'
+    GET_URL = 'http://labs.chirp.io/get'
+    POST_URL = 'http://labs.chirp.io/chirp'
 
     def __init__(self):
         self.map = self.get_map()
@@ -229,15 +226,19 @@ class Chirp():
                 else:
                     # try and perform error correction
                     corrected = self.ecc(chirp_code[2:])
-                    if corrected is not None:
+                    if corrected:
                         chirp_code = 'hj' + corrected
 
-                    url = self.GET_URL + '/' + chirp_code[2:12]
-                    print ('\nFound Chirp!')
-                    # print (chirp_code)
-                    print ('URL: %s' % url)
-                    webbrowser.open(url)
-                    return
+                    r = requests.get(self.GET_URL + '/' + chirp_code[2:12])
+                    if r.status_code == 200:
+                        print('\nFound Chirp!')
+                        rsp = r.json()
+                        # print (chirp_code)
+                        print('URL: %s' % rsp['url'])
+                        if 'data' in rsp and 'description' in rsp['data']:
+                            print(rsp['data']['description'])
+                        webbrowser.open(rsp['url'])
+                        return
             s += 1
 
     def string_to_list(self, s):
@@ -331,6 +332,6 @@ if __name__ == '__main__':
     elif args.url:
         audio = Audio()
         code = chirp.get_code(args.url)
-        samples = chirp.encode(code)
+        samples = chirp.encode(code, internal=args.internal)
         print('Chirping url: %s' % args.url)
         audio.play(samples)
