@@ -15,12 +15,13 @@ Dependencies
 - pyAudio
 - numpy
 - requests
+- python-magic (libmagic)
 
 Usage
 -----
 
 ```
-python chirp.py [-h] [-l] [-i] [-u <url>] [-c <code>]
+python chirp.py [-h] [-l] [-i] [-u <url>] [-c <code>] [-f <file>]
 
 optional arguments:
   -h, --help                  show this help message and exit
@@ -28,4 +29,5 @@ optional arguments:
   -i, --internal              uses internal error correction
   -u <url>, --url <url>       chirp a url
   -c <code>, --code <code>    chirp a code
+  -f <file>, --file <file>    chirp a file, path to either a jpg, png or pdf
 ```

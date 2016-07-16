@@ -2,9 +2,11 @@
 """
 Chirp.io Encoder/Decoder
 """
+import os
 import sys
 import wave
 import time
+import magic
 import string
 import pyaudio
 import reedsolo
@@ -128,6 +130,7 @@ class Chirp():
     CHIRP_VOLUME = 2 ** 16 / 48  # quarter of max amplitude
     GET_URL = 'http://labs.chirp.io/get'
     POST_URL = 'http://labs.chirp.io/chirp'
+    FILE_URL = 'http://labs.chirp.io/file'
 
     def __init__(self):
         self.map = self.get_map()
@@ -162,6 +165,24 @@ class Chirp():
         except:
             print('Server failed to respond')
             sys.exit(-1)
+
+    def get_file_code(self, filename, filetype):
+        """ Request a long code for a file from chirp API """
+        try:
+            with open(filename, 'rb') as payload:
+                data = payload.read()
+            headers = {'Content-Type': filetype, 'Accept': 'application/json'}
+            params = {'title': os.path.basename(filename)}
+            r = requests.post(self.FILE_URL, data=data, headers=headers, verify=False)
+            rsp = r.json()
+            if 'longcode' in rsp:
+                return 'hj' + rsp['longcode']
+            elif 'error' in rsp:
+                print(rsp['error']['msg'])
+                sys.exit(-1)
+        except:
+           print('Server failed to respond')
+           sys.exit(-1)
 
     def get_char(self, data):
         """ Find maximum frequency in fft data then find the closest
@@ -302,14 +323,15 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--internal', action='store_true', default=False, help='use internal error correction')
     parser.add_argument('-u', '--url', help='chirp a url')
     parser.add_argument('-c', '--code', help='chirp a code')
+    parser.add_argument('-f', '--file', help='chirp a file, path to either a jpg, png or pdf')
     args = parser.parse_args()
 
     chirp = Chirp()
+    audio = Audio()
     dsp = Signal(SAMPLE_RATE)
 
     if args.listen:
         try:
-            audio = Audio()
             thread = DecodeThread(chirp.search)
             thread.start()
             print('Recording...')
@@ -324,14 +346,29 @@ if __name__ == '__main__':
             sys.exit(0)
 
     elif args.code:
-        audio = Audio()
         samples = chirp.encode(args.code, internal=args.internal)
         print('Chirping code: %s' % args.code)
         audio.play(samples)
 
     elif args.url:
-        audio = Audio()
         code = chirp.get_code(args.url)
         samples = chirp.encode(code, internal=args.internal)
         print('Chirping url: %s' % args.url)
         audio.play(samples)
+
+    elif args.file:
+        filetype = magic.from_file(args.file, mime=True)
+        if filetype not in ('image/jpeg', 'image/png', 'application/pdf'):
+            print('Filetype not supported')
+            sys.exit(-1)
+
+        code = chirp.get_file_code(args.file, filetype)
+        samples = chirp.encode(code, internal=args.internal)
+        print('Chirping file: %s' % args.file)
+        audio.play(samples)
+
+    else:
+        print('No arguments specified!')
+        print('Exiting..')
+
+    sys.exit(0)
