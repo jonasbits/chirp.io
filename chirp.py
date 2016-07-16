@@ -169,11 +169,10 @@ class Chirp():
     def get_file_code(self, filename, filetype):
         """ Request a long code for a file from chirp API """
         try:
-            with open(filename, 'rb') as payload:
-                data = payload.read()
             headers = {'Content-Type': filetype, 'Accept': 'application/json'}
             params = {'title': os.path.basename(filename)}
-            r = requests.post(self.FILE_URL, data=data, headers=headers, verify=False)
+            r = requests.post(self.FILE_URL, files={filename: open(filename, 'rb')},
+                              headers=headers, params=params)
             rsp = r.json()
             if 'longcode' in rsp:
                 return 'hj' + rsp['longcode']
