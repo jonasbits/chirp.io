@@ -139,7 +139,7 @@ class Chirp():
         self.map = self.get_map()
         self.chars = sorted(self.map.keys())
         self.dsp = Signal(self.RATE)
-        self.rs = reedsolo.RSCodec(nsym=8, nsize=18, prim=0x25, generator=2, c_exp=5)
+        self.rs = reedsolo.RSCodec(nsym=8, nsize=20, prim=0x25, generator=2, c_exp=5)
 
     def get_map(self):
         """ Construct map of chirp characters to frequencies
@@ -218,7 +218,7 @@ class Chirp():
         """ Generate audio data from a chirp string """
         samples = np.array([], dtype=np.int16)
         if internal:
-            chirp = 'hj' + self.ecc(chirp[2:], encode=internal)
+            chirp = self.ecc(chirp, encode=internal)
 
         for s in chirp:
             freq = self.map[s]
@@ -248,9 +248,9 @@ class Chirp():
                     s += chirp_code * self.CHAR_SAMPLES
                 else:
                     # try and perform error correction
-                    corrected = self.ecc(chirp_code[2:])
+                    corrected = self.ecc(chirp_code)
                     if corrected:
-                        chirp_code = 'hj' + corrected
+                        chirp_code = corrected
 
                     r = requests.get(self.GET_URL + '/' + chirp_code[2:12])
                     if r.status_code == 200:
