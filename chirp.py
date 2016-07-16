@@ -33,7 +33,10 @@ class Audio():
         self.audio = pyaudio.PyAudio()
 
     def __del__(self):
-        self.audio.terminate()
+        try:
+            self.audio.terminate()
+        except:
+            pass
 
     def record(self, seconds, filename=None):
         """ Record audio from system microphone """
@@ -94,7 +97,7 @@ class Signal():
     """ Digital Signal Processing """
 
     def __init__(self, fs):
-        self.fs = fs  # sampling frequency
+        self.fs = float(fs)  # sampling frequency
 
     def fft(self, y):
         """ Perform FFT on y with sampling rate"""
@@ -102,10 +105,10 @@ class Signal():
         k = np.arange(n)
         T = n / self.fs
         freq = k / T  # two sides frequency range
-        freq = freq[range(n / 2)]  # one side frequency range
+        freq = freq[range(int(n / 2))]  # one side frequency range
 
         Y = np.fft.fft(y) / n  # fft computing and normalisation
-        Y = Y[range(n / 2)]
+        Y = Y[range(int(n / 2))]
 
         return (freq, abs(Y))
 
@@ -196,17 +199,17 @@ class Chirp():
         chirp = ''
 
         # check for frontdoor pair
-        chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
+        chirp += self.get_char(data[s:s+int(self.CHAR_SAMPLES)])
         s += self.CHAR_SAMPLES
         if chirp != 'h':
             return 1
-        chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
+        chirp += self.get_char(data[int(s):int(s+self.CHAR_SAMPLES)])
         s += self.CHAR_SAMPLES
         if chirp != 'hj':
             return 2
 
         for i in range(2, 20):
-            chirp += self.get_char(data[s:s+self.CHAR_SAMPLES])
+            chirp += self.get_char(data[int(s):int(s+self.CHAR_SAMPLES)])
             s += self.CHAR_SAMPLES
 
         return chirp
@@ -236,10 +239,10 @@ class Chirp():
 
         while s < datalen - self.CHIRP_SAMPLES:
             # search for start of audio
-            if data[s] > MIN_AMPLITUDE:
+            if data[int(s)] > MIN_AMPLITUDE:
                 # check for any chirps, if unsuccessful
                 # carry on searching..
-                chirp_code = self.decode(data[s:])
+                chirp_code = self.decode(data[int(s):])
                 # advance pointer by searched data
                 if isinstance(chirp_code, int):
                     s += chirp_code * self.CHAR_SAMPLES
